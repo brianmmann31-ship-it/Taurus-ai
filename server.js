@@ -442,6 +442,25 @@ app.get('/api/health', requireAuth, async (req, res) => {
   res.json({ pm2: pm2Status, server: { uptime: process.uptime(), memory: process.memoryUsage(), port: PORT } });
 });
 
+// ── TTS ───────────────────────────────────────────────────────────────────────
+app.post('/api/tts', requireAuth, async (req, res) => {
+  const { text } = req.body;
+  if (!text) return res.status(400).json({ error: 'No text' });
+  const key = process.env.ELEVENLABS_KEY;
+  const voice = process.env.ELEVENLABS_VOICE || '6FiCmD8eY5VyjOdG5Zjk';
+  if (!key) return res.status(500).json({ error: 'No ElevenLabs key' });
+  try {
+    const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice}`, {
+      method: 'POST',
+      headers: { 'xi-api-key': key, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg' },
+      body: JSON.stringify({ text: text.slice(0, 500), model_id: 'eleven_monolingual_v1', voice_settings: { stability: 0.4, similarity_boost: 0.8, style: 0.6, use_speaker_boost: true } })
+    });
+    if (!r.ok) { const e = await r.json(); return res.status(500).json({ error: e.detail?.message || 'TTS failed' }); }
+    res.setHeader('Content-Type', 'audio/mpeg');
+    r.body.pipe(res);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Static ────────────────────────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));

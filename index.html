@@ -661,6 +661,36 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   <input type="file" id="file-input" style="display:none" multiple accept=".js,.ts,.html,.css,.json,.md,.txt,.py,.env,.sh,.jpg,.jpeg,.png,.pdf">
 </div>
 
+
+<!-- Welcome template -->
+<div id="_welcome_tpl" style="display:none"><div class="welcome-screen" id="welcome-screen">
+      <svg class="welcome-bull" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="bodyGrad2" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#6b7a8d"/><stop offset="100%" stop-color="#1a2030"/></radialGradient>
+          <filter id="glow2"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+        <path d="M25 45 Q15 20 30 15 Q35 30 40 42Z" fill="#2a3040" stroke="#ff6b1a" stroke-width="0.8"/>
+        <path d="M95 45 Q105 20 90 15 Q85 30 80 42Z" fill="#2a3040" stroke="#ff6b1a" stroke-width="0.8"/>
+        <ellipse cx="60" cy="30" rx="38" ry="12" fill="none" stroke="#ff6b1a" stroke-width="1.5" opacity="0.5" filter="url(#glow2)"/>
+        <polygon points="60,30 45,50 40,70 60,80 80,70 75,50" fill="url(#bodyGrad2)" stroke="#3a4560" stroke-width="0.8"/>
+        <path d="M57 38 Q58 30 60 26 Q62 30 63 38Z" fill="#ff6b1a" filter="url(#glow2)" opacity="0.9"/>
+        <path d="M60,32 L55,55 L60,62 L65,55Z" fill="#3a4560" stroke="#ff6b1a" stroke-width="0.5" opacity="0.8"/>
+        <ellipse cx="50" cy="56" rx="7" ry="5" fill="#cc3d00" filter="url(#glow2)"/>
+        <ellipse cx="70" cy="56" rx="7" ry="5" fill="#cc3d00" filter="url(#glow2)"/>
+        <ellipse cx="50" cy="56" rx="4" ry="3" fill="#ff2200"/>
+        <ellipse cx="70" cy="56" rx="4" ry="3" fill="#ff2200"/>
+        <rect x="50" y="68" width="20" height="12" rx="3" fill="#2a3040" stroke="#3a4560" stroke-width="0.8"/>
+        <ellipse cx="60" cy="74" rx="6" ry="3" fill="none" stroke="#ff6b1a" stroke-width="1.5" opacity="0.8"/>
+      </svg>
+      <div class="welcome-title">TAURUS AI</div>
+      <div class="welcome-sub">Elite code writing, problem solving, and design intelligence. Ready to build.</div>
+      <div class="quick-actions">
+        <button class="quick-btn" onclick="quickAction('Write me a Node.js Express API with auth')"><span class="quick-btn-icon">⚡</span>Build API</button>
+        <button class="quick-btn" onclick="quickAction('Debug this code and fix all issues:')"><span class="quick-btn-icon">🔧</span>Debug Code</button>
+        <button class="quick-btn" onclick="quickAction('Design a premium mobile UI for')"><span class="quick-btn-icon">🎨</span>Design UI</button>
+        <button class="quick-btn" onclick="quickAction('Explain how this works and best practices:')"><span class="quick-btn-icon">🧠</span>Explain</button>
+      </div>
+    </div></div>
 <!-- Save dialog -->
 <div class="dialog-overlay" id="save-dialog">
   <div class="dialog">
@@ -716,6 +746,11 @@ async function login() {
 function showApp() {
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app').classList.add('visible');
+  messages = [];
+  const area = document.getElementById('chat-area');
+  area.innerHTML = '';
+  const ws = document.getElementById('_welcome_tpl');
+  if (ws) { const clone = ws.cloneNode(true); clone.id = 'welcome-screen'; clone.style.display = ''; area.appendChild(clone); }
   loadKeyStatus();
   loadSidebar();
 }
@@ -824,9 +859,12 @@ async function loadSidebar() {
     if (currentTab === 'chats') {
       const r = await fetch('/api/chats'); items = await r.json();
       c.innerHTML = items.length ? items.map(i => `
-        <div class="sidebar-item" onclick="loadChat('${i.id}')">
-          <div class="sidebar-item-title">${escHtml(i.name)}</div>
-          <div class="sidebar-item-meta">${new Date(i.savedAt).toLocaleDateString()} · ${i.messageCount} messages</div>
+        <div class="sidebar-item" style="display:flex;align-items:center;gap:8px;padding-right:6px;">
+          <div style="flex:1;min-width:0;cursor:pointer;" onclick="loadChat('${i.id}')">
+            <div class="sidebar-item-title">${escHtml(i.name)}</div>
+            <div class="sidebar-item-meta">${new Date(i.savedAt).toLocaleDateString()} · ${i.messageCount} messages</div>
+          </div>
+          <div onclick="deleteChat('${i.id}')" style="flex-shrink:0;width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:var(--text2);border-radius:4px;cursor:pointer;font-size:15px;" onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--text2)'">✕</div>
         </div>`).join('') : '<div style="padding:16px;color:var(--text2);font-size:13px">No saved chats</div>';
     } else if (currentTab === 'builds') {
       const r = await fetch('/api/builds'); items = await r.json();
@@ -844,6 +882,14 @@ async function loadSidebar() {
         </div>`).join('') : '<div style="padding:16px;color:var(--text2);font-size:13px">No saved files</div>';
     }
   } catch(e) { c.innerHTML = '<div style="padding:16px;color:var(--danger);font-size:13px">Error loading</div>'; }
+}
+
+async function deleteChat(id) {
+  try {
+    await fetch(`/api/chats/${id}`, { method: 'DELETE' });
+    showToast('Chat deleted', 'success');
+    loadSidebar();
+  } catch(e) { showToast('Delete failed', 'error'); }
 }
 
 async function loadChat(id) {
@@ -966,7 +1012,7 @@ function renderMessage(role, content, scroll) {
   div.appendChild(inner);
   area.appendChild(div);
 
-  if (scroll) area.scrollTop = area.scrollHeight;
+  if (scroll) { area.scrollTop = area.scrollHeight; setTimeout(() => area.scrollTop = area.scrollHeight, 50); }
 }
 
 function formatMessage(text) {

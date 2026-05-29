@@ -269,7 +269,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 
 .message-bubble {
   max-width: calc(100% - 46px); padding: 12px 14px; border-radius: 8px;
-  font-size: 15px; line-height: 1.6; position: relative;
+  font-size: 19px; line-height: 1.6; position: relative;
 }
 .message.user .message-bubble {
   background: linear-gradient(135deg, rgba(255,107,26,0.15), rgba(204,61,0,0.1));
@@ -337,7 +337,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 
 #msg-input {
   flex: 1; background: none; border: none; outline: none;
-  color: var(--white); font-family: var(--font-body); font-size: 16px; line-height: 1.4;
+  color: var(--white); font-family: var(--font-body); font-size: 19px; line-height: 1.4;
   resize: none; max-height: 120px; min-height: 24px;
 }
 #msg-input::placeholder { color: var(--text2); }
@@ -661,36 +661,6 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   <input type="file" id="file-input" style="display:none" multiple accept=".js,.ts,.html,.css,.json,.md,.txt,.py,.env,.sh,.jpg,.jpeg,.png,.pdf">
 </div>
 
-
-<!-- Welcome template -->
-<div id="_welcome_tpl" style="display:none"><div class="welcome-screen" id="welcome-screen">
-      <svg class="welcome-bull" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <radialGradient id="bodyGrad2" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#6b7a8d"/><stop offset="100%" stop-color="#1a2030"/></radialGradient>
-          <filter id="glow2"><feGaussianBlur stdDeviation="2" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-        </defs>
-        <path d="M25 45 Q15 20 30 15 Q35 30 40 42Z" fill="#2a3040" stroke="#ff6b1a" stroke-width="0.8"/>
-        <path d="M95 45 Q105 20 90 15 Q85 30 80 42Z" fill="#2a3040" stroke="#ff6b1a" stroke-width="0.8"/>
-        <ellipse cx="60" cy="30" rx="38" ry="12" fill="none" stroke="#ff6b1a" stroke-width="1.5" opacity="0.5" filter="url(#glow2)"/>
-        <polygon points="60,30 45,50 40,70 60,80 80,70 75,50" fill="url(#bodyGrad2)" stroke="#3a4560" stroke-width="0.8"/>
-        <path d="M57 38 Q58 30 60 26 Q62 30 63 38Z" fill="#ff6b1a" filter="url(#glow2)" opacity="0.9"/>
-        <path d="M60,32 L55,55 L60,62 L65,55Z" fill="#3a4560" stroke="#ff6b1a" stroke-width="0.5" opacity="0.8"/>
-        <ellipse cx="50" cy="56" rx="7" ry="5" fill="#cc3d00" filter="url(#glow2)"/>
-        <ellipse cx="70" cy="56" rx="7" ry="5" fill="#cc3d00" filter="url(#glow2)"/>
-        <ellipse cx="50" cy="56" rx="4" ry="3" fill="#ff2200"/>
-        <ellipse cx="70" cy="56" rx="4" ry="3" fill="#ff2200"/>
-        <rect x="50" y="68" width="20" height="12" rx="3" fill="#2a3040" stroke="#3a4560" stroke-width="0.8"/>
-        <ellipse cx="60" cy="74" rx="6" ry="3" fill="none" stroke="#ff6b1a" stroke-width="1.5" opacity="0.8"/>
-      </svg>
-      <div class="welcome-title">TAURUS AI</div>
-      <div class="welcome-sub">Elite code writing, problem solving, and design intelligence. Ready to build.</div>
-      <div class="quick-actions">
-        <button class="quick-btn" onclick="quickAction('Write me a Node.js Express API with auth')"><span class="quick-btn-icon">⚡</span>Build API</button>
-        <button class="quick-btn" onclick="quickAction('Debug this code and fix all issues:')"><span class="quick-btn-icon">🔧</span>Debug Code</button>
-        <button class="quick-btn" onclick="quickAction('Design a premium mobile UI for')"><span class="quick-btn-icon">🎨</span>Design UI</button>
-        <button class="quick-btn" onclick="quickAction('Explain how this works and best practices:')"><span class="quick-btn-icon">🧠</span>Explain</button>
-      </div>
-    </div></div>
 <!-- Save dialog -->
 <div class="dialog-overlay" id="save-dialog">
   <div class="dialog">
@@ -719,18 +689,53 @@ let isRecording = false;
 let currentProvider = 'free';
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
+// ── Session persistence (server-side) ────────────────────────────────────────
+async function restoreSession() {
+  try {
+    const r = await fetch('/api/chats');
+    if (!r.ok) return;
+    const chats = await r.json();
+    const session = chats.find(c => c.name === '__autosave__');
+    if (!session) return;
+    const r2 = await fetch('/api/chats/' + session.id);
+    if (!r2.ok) return;
+    const d = await r2.json();
+    if (d.messages && d.messages.length > 0) {
+      messages = d.messages;
+      const area = document.getElementById('chat-area');
+      area.innerHTML = '';
+      document.getElementById('welcome-screen')?.remove();
+      messages.forEach(m => renderMessage(m.role, m.content, false));
+      setTimeout(() => area.scrollTop = area.scrollHeight, 100);
+    }
+  } catch(e) {}
+}
+
+async function autoSaveSession() {
+  try {
+    // Delete old autosave then re-save
+    const r = await fetch('/api/chats');
+    if (r.ok) {
+      const chats = await r.json();
+      const old = chats.find(c => c.name === '__autosave__');
+      if (old) await fetch('/api/chats/' + old.id, { method: 'DELETE' });
+    }
+    await fetch('/api/chats/save', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ name: '__autosave__', messages })
+    });
+  } catch(e) {}
+}
+
 function checkAuth() { showApp(); }
 
 function showApp() {
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app').classList.add('visible');
-  messages = [];
-  const area = document.getElementById('chat-area');
-  area.innerHTML = '';
-  const ws = document.getElementById('_welcome_tpl');
-  if (ws) { const clone = ws.cloneNode(true); clone.id = 'welcome-screen'; clone.style.display = ''; area.appendChild(clone); }
   loadKeyStatus();
   loadSidebar();
+  restoreSession();
 }
 
 // ── Build Mode ────────────────────────────────────────────────────────────────
@@ -939,6 +944,7 @@ async function sendMessage() {
     else {
       renderMessage('assistant', d.text, true);
       messages.push({ role: 'assistant', content: d.text });
+      autoSaveSession();
       if (d.provider) { document.getElementById('model-badge').textContent = d.model || d.provider.toUpperCase(); currentProvider = d.provider; }
       // Auto-detect build output and save
       if (d.text.includes('```') && buildMode) {
@@ -959,7 +965,7 @@ function renderMessage(role, content, scroll) {
   
   const avatar = document.createElement('div');
   avatar.className = 'message-avatar';
-  avatar.innerHTML = role === 'user' ? '👤' : `<svg width="18" height="18" viewBox="0 0 120 120"><path d="M25 45 Q15 20 30 15 Q35 30 40 42Z" fill="#2a3040" stroke="#ff6b1a" stroke-width="1"/><path d="M95 45 Q105 20 90 15 Q85 30 80 42Z" fill="#2a3040" stroke="#ff6b1a" stroke-width="1"/><polygon points="60,30 45,50 40,70 60,80 80,70 75,50" fill="#2a3040"/><ellipse cx="50" cy="56" rx="6" ry="4" fill="#ff2200"/><ellipse cx="70" cy="56" rx="6" ry="4" fill="#ff2200"/></svg>`;
+  avatar.innerHTML = role === 'user' ? `<svg viewBox="0 0 120 120" width="20" height="20"><path d="M25 45 Q15 20 30 15 Q35 30 40 42Z" fill="#2a3040" stroke="#ff6b1a" stroke-width="1"/><path d="M95 45 Q105 20 90 15 Q85 30 80 42Z" fill="#2a3040" stroke="#ff6b1a" stroke-width="1"/><polygon points="60,30 45,50 40,70 60,80 80,70 75,50" fill="#2a3040"/><ellipse cx="50" cy="56" rx="6" ry="4" fill="#ff2200"/><ellipse cx="70" cy="56" rx="6" ry="4" fill="#ff2200"/></svg>` : `<svg width="18" height="18" viewBox="0 0 120 120"><path d="M25 45 Q15 20 30 15 Q35 30 40 42Z" fill="#2a3040" stroke="#ff6b1a" stroke-width="1"/><path d="M95 45 Q105 20 90 15 Q85 30 80 42Z" fill="#2a3040" stroke="#ff6b1a" stroke-width="1"/><polygon points="60,30 45,50 40,70 60,80 80,70 75,50" fill="#2a3040"/><ellipse cx="50" cy="56" rx="6" ry="4" fill="#ff2200"/><ellipse cx="70" cy="56" rx="6" ry="4" fill="#ff2200"/></svg>`;
 
   const bubble = document.createElement('div');
   bubble.className = 'message-bubble';
@@ -990,7 +996,7 @@ function renderMessage(role, content, scroll) {
   div.appendChild(inner);
   area.appendChild(div);
 
-  if (scroll) { area.scrollTop = area.scrollHeight; setTimeout(() => area.scrollTop = area.scrollHeight, 50); }
+  if (scroll) area.scrollTop = area.scrollHeight;
 }
 
 function formatMessage(text) {
